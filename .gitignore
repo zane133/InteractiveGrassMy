@@ -1,0 +1,29 @@
+# Unreal Engine generated folders
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+
+# Plugin generated folders
+/Plugins/*/Binaries/
+/Plugins/*/Intermediate/
+
+# Visual Studio and IDE files
+/.vs/
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+*.userprefs
+*.sln.docstates
+
+# Generated project files
+*.opensdf
+*.opendb
+*.sdf
+*.tmp
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
