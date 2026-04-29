@@ -32,6 +32,27 @@
 
 `Content/Python/addons/ChannelDataBaker/DEVNOTES.md`
 
+## DSL / 自动导出
+
+- **Blueprint → BlueprintLisp**
+  - 脚本：`Content/Python/export_blueprints.py`
+  - 用法（UE Python 控制台 / Output Log）：
+    - 将 `Content/Python` 加入 `sys.path`
+    - 调用 `export_blueprints.export_all()` 或 `export_blueprints.export_path("/Game/InteractiveGrass")`
+  - 输出位置：`Saved/BP2DSL/BlueprintLisp/.../*.bplisp`
+
+- **Material → MatLang**
+  - 脚本：`Content/Python/export_materials.py`
+  - 依赖插件：`Plugins/MaterialBP2DSL`（提供 `MatBP2FPPythonBridge`）
+  - 支持将 `Material / MaterialInstance / MaterialFunction` 导出为可读 DSL：
+    - 基础 `Material`：通过 MatLang 导出完整节点图（含 `(expressions ...)` / `(outputs ...)`）
+    - `MaterialInstance`：导出标量/向量/贴图/静态开关参数
+    - `MaterialFunction`：当前仅导出名称与 `description` 壳，**尚未实现完整节点图导出**（需要在 `MaterialBP2DSL` 插件中增加对 `UMaterialFunction` 的 MatLang 导出支持，然后在 `export_materials.py` 中接入）
+  - 常用用法：
+    - Content Browser 选中若干材质资产 → `export_materials.export_selected()`
+    - 或指定路径批量导出：`export_materials.export_path("/Game/InteractiveGrass")`
+  - 输出位置：`Saved/BP2DSL/Materials/.../*.matdsl`
+
 ## 目录概览
 
 - `Content/InteractiveGrass/`: 交互草地主要资源与地图
@@ -43,4 +64,5 @@
 
 - 仓库已通过 `.gitignore` 忽略 Unreal 生成文件，如 `Binaries/`、`Intermediate/`、`Saved/`
 - `Plugins/Blueprint2DSL-main` 当前是独立 Git 仓库引用，不是普通目录拷贝；如果你克隆后缺少该插件内容，需要单独获取或移除该插件目录
+- `Plugins/MaterialBP2DSL` 为材质 DSL（MatLang）支持插件，Material 导出脚本依赖其中的 `MatBP2FPPythonBridge`，在其它工程中复用脚本时需要一并启用该插件
 

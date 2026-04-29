@@ -73,6 +73,47 @@ def _export_material_to_matlang_text(mat: unreal.Material) -> str:
     return text
 
 
+def _export_material_function_to_matlang_text(mf) -> str:
+    """
+    使用 MaterialBP2DSL 插件，把 UMaterialFunction 导出为 MatLang 文本。
+    如果插件未实现对应接口，则返回空串并回退到简易描述格式。
+    """
+    try:
+        bridge = unreal.MatBP2FPPythonBridge
+    except Exception as e:
+        print(f"  [MaterialDSL] MatBP2FPPythonBridge not available for MaterialFunction: {e}")
+        return ""
+
+    path = mf.get_path_name()
+
+    # 优先尝试插件里可能提供的专用函数导出接口，
+    # 如未找到则退回到与 Material 相同的 export_material_to_text，
+    # 再不行就整体失败并回退到旧格式。
+    export_fn = getattr(bridge, "export_material_function_to_text", None)
+    if export_fn is None:
+        export_fn = getattr(bridge, "export_material_to_text", None)
+
+    if export_fn is None:
+        print("  [MaterialDSL] No MaterialFunction export API found on MatBP2FPPythonBridge")
+        return ""
+
+    try:
+        result = export_fn(path)
+    except Exception as e:
+        print(f"  [MaterialDSL] ExportMaterialFunctionToText failed for {path}: {e}")
+        return ""
+
+    if not getattr(result, "success", False):
+        msg = getattr(result, "message", "")
+        print(f"  [MaterialDSL] ExportMaterialFunctionToText returned failure for {path}: {msg}")
+        return ""
+
+    text = getattr(result, "dsl_text", "")
+    if not text:
+        print(f"  [MaterialDSL] ExportMaterialFunctionToText returned empty DSL for {path}")
+    return text
+
+
 def _lines_material(mat: unreal.Material) -> list:
     """
     对于基础 Material，优先通过 MatBP2FPPythonBridge 导出完整 MatLang。
@@ -178,6 +219,15 @@ def _lines_material_instance(mi) -> list:
 
 
 def _lines_material_function(mf) -> list:
+    """
+    对于 MaterialFunction，尝试通过 MatBP2FPPythonBridge 导出完整 MatLang。
+    如果桥接不可用或失败，则回退到只导出名称和描述的简易格式。
+    """
+    dsl = _export_material_function_to_matlang_text(mf)
+    if dsl:
+        return dsl.splitlines()
+
+    # 回退：仅导出壳信息，保持兼容旧行为
     return [
         f'(material-function "{mf.get_path_name()}"',
         f'  :description "{(mf.get_editor_property("description") or "").strip()}"',
