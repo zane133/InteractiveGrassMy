@@ -8,6 +8,13 @@
 /Plugins/*/Binaries/
 /Plugins/*/Intermediate/
 
+# UnrealSharp: C# glue project build output and UHT-generated bindings (under obj/, e.g. obj/UHT/)
+**/*.Glue/bin/
+**/*.Glue/obj/
+
+# Plugin folder cloned as its own git repo (avoid tracking nested .git metadata)
+Plugins/**/.git/
+
 # Visual Studio and IDE files
 /.vs/
 *.VC.db
