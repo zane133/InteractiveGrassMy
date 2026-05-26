@@ -7,10 +7,24 @@
 		{
 			"Name": "InteractiveGrassMy",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
+			"LoadingPhase": "PostConfigInit",
 			"AdditionalDependencies": [
 				"Engine"
 			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "TA_Tools",
+			"Enabled": true
+		},
+		{
+			"Name": "MatBP2FP",
+			"Enabled": true
+		},
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
 		}
 	]
 }
