@@ -7,7 +7,7 @@
 
 static TAutoConsoleVariable<int32> CVarInverseColor(
 	TEXT("r.InverseColor"),
-	1,
+	0,
 	TEXT("Enable inverse color post process effect.\n")
 	TEXT("0: Disabled\n")
 	TEXT("1: Enabled"),
