@@ -1,27 +1,39 @@
 // f:\xiawan\ahui_xiawan_p4\xiawan\Plugins\TA_Tools\Source\TA_Tools\Private\SplineGrassGenerator.cpp
 #include "SplineGrassGenerator.h"
-#include "Modules/ModuleManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/BodySetup.h"
 
 #if WITH_EDITOR
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "AssetExportTask.h"
-#include "AssetImportTask.h"
 #include "StaticMeshAttributes.h"
 #include "MeshDescription.h"
 #include "MeshDescriptionBuilder.h"
-#include "AssetToolsModule.h"
 #include "UObject/SavePackage.h"
 #include "Engine/StaticMesh.h"
 #include "BodySetupEnums.h"
 #include "Engine/CollisionProfile.h"
-#include "Exporters/Exporter.h"
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
-#include "Misc/Paths.h"
-#include "HAL/FileManager.h"
+#include "Misc/PackageName.h"
 #endif
+
+namespace
+{
+    const FName GrassMaterialSlotName(TEXT("Grass"));
+
+#if WITH_EDITOR
+    void ConfigureCustomLODSourceModel(FStaticMeshSourceModel& SourceModel, int32 LODIndex, float ScreenSize)
+    {
+        SourceModel.BuildSettings.bGenerateLightmapUVs = false;
+        SourceModel.BuildSettings.bRecomputeNormals = false;
+        SourceModel.BuildSettings.bRecomputeTangents = true;
+
+        SourceModel.ResetReductionSetting();
+        SourceModel.ReductionSettings.BaseLODModel = LODIndex;
+        SourceModel.ScreenSize.Default = ScreenSize;
+    }
+#endif
+}
 
 ASplineGrassGenerator::ASplineGrassGenerator()
 {
@@ -74,6 +86,11 @@ float ASplineGrassGenerator::GetWidthAtDistance(float NormalizedDistance)
 
 void ASplineGrassGenerator::BuildGrassMesh(TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FVector2D>& UVs, TArray<FColor>& VertexColors)
 {
+    BuildGrassMesh(Vertices, Triangles, Normals, UVs, VertexColors, LengthSegments, WidthSegments);
+}
+
+void ASplineGrassGenerator::BuildGrassMesh(TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FVector2D>& UVs, TArray<FColor>& VertexColors, int32 InLengthSegments, int32 InWidthSegments)
+{
     Vertices.Empty();
     Triangles.Empty();
     Normals.Empty();
@@ -86,21 +103,21 @@ void ASplineGrassGenerator::BuildGrassMesh(TArray<FVector>& Vertices, TArray<int
     }
 
     float SplineLength = SplineComponent->GetSplineLength();
-    int32 NumLengthVerts = LengthSegments + 1;
-    int32 NumWidthVerts = WidthSegments + 1;
+    int32 NumLengthVerts = InLengthSegments + 1;
+    int32 NumWidthVerts = InWidthSegments + 1;
 
     FVector PrevRight = SplineComponent->GetRightVectorAtDistanceAlongSpline(0, ESplineCoordinateSpace::Local);
 
     for (int32 LengthIdx = 0; LengthIdx < NumLengthVerts; LengthIdx++)
     {
-        float LengthAlpha = (float)LengthIdx / (float)LengthSegments;
+        float LengthAlpha = (float)LengthIdx / (float)InLengthSegments;
         float Distance = LengthAlpha * SplineLength;
 
         FVector SplinePos = SplineComponent->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::Local);
         FVector Tangent = SplineComponent->GetTangentAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::Local).GetSafeNormal();
-        
+
         FVector SplineRight = SplineComponent->GetRightVectorAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::Local);
-        
+
         if (FVector::DotProduct(SplineRight, PrevRight) < 0)
         {
             SplineRight = -SplineRight;
@@ -108,12 +125,12 @@ void ASplineGrassGenerator::BuildGrassMesh(TArray<FVector>& Vertices, TArray<int
         PrevRight = SplineRight;
 
         FVector Normal = FVector::CrossProduct(SplineRight, Tangent).GetSafeNormal();
-        
+
         float CurrentWidth = GetWidthAtDistance(LengthAlpha);
 
         for (int32 WidthIdx = 0; WidthIdx < NumWidthVerts; WidthIdx++)
         {
-            float WidthAlpha = (float)WidthIdx / (float)WidthSegments;
+            float WidthAlpha = (float)WidthIdx / (float)InWidthSegments;
             float WidthOffset = (WidthAlpha - 0.5f) * 2.0f * CurrentWidth;
 
             FVector VertexPos = SplinePos + SplineRight * WidthOffset;
@@ -130,9 +147,9 @@ void ASplineGrassGenerator::BuildGrassMesh(TArray<FVector>& Vertices, TArray<int
         }
     }
 
-    for (int32 LengthIdx = 0; LengthIdx < LengthSegments; LengthIdx++)
+    for (int32 LengthIdx = 0; LengthIdx < InLengthSegments; LengthIdx++)
     {
-        for (int32 WidthIdx = 0; WidthIdx < WidthSegments; WidthIdx++)
+        for (int32 WidthIdx = 0; WidthIdx < InWidthSegments; WidthIdx++)
         {
             int32 BL = LengthIdx * NumWidthVerts + WidthIdx;
             int32 BR = BL + 1;
@@ -192,7 +209,14 @@ void ASplineGrassGenerator::GeneratePreview()
     TArray<FVector2D> UVs;
     TArray<FColor> VertexColors;
 
-    BuildGrassMesh(Vertices, Triangles, Normals, UVs, VertexColors);
+    int32 PreviewLenSegs = LengthSegments;
+    int32 PreviewWidSegs = WidthSegments;
+    if (LODs.Num() > 0)
+    {
+        PreviewLenSegs = LODs[0].LengthSegments;
+        PreviewWidSegs = LODs[0].WidthSegments;
+    }
+    BuildGrassMesh(Vertices, Triangles, Normals, UVs, VertexColors, PreviewLenSegs, PreviewWidSegs);
 
     if (Vertices.Num() == 0)
     {
@@ -224,7 +248,7 @@ void ASplineGrassGenerator::GeneratePreview()
         VertexInstances.Add(InstanceID);
     }
 
-    FPolygonGroupID PolyGroup = MeshBuilder.AppendPolygonGroup();
+    FPolygonGroupID PolyGroup = MeshBuilder.AppendPolygonGroup(GrassMaterialSlotName);
     for (int32 i = 0; i < Triangles.Num(); i += 3)
     {
         TArray<FVertexInstanceID> TriVerts;
@@ -238,6 +262,10 @@ void ASplineGrassGenerator::GeneratePreview()
     MeshDescriptions.Add(&MeshDesc);
     TransientMesh->InitResources();
     TransientMesh->SetLightingGuid();
+    if (UMaterialInterface* DefaultSurfaceMat = UMaterial::GetDefaultMaterial(EMaterialDomain::MD_Surface))
+    {
+        TransientMesh->GetStaticMaterials().Add(FStaticMaterial(DefaultSurfaceMat, GrassMaterialSlotName, GrassMaterialSlotName));
+    }
     UStaticMesh::FBuildMeshDescriptionsParams BuildParams;
     BuildParams.bBuildSimpleCollision = true;  // 生成简单碰撞，编辑器内显示紫色碰撞体
     BuildParams.bFastBuild = false;
@@ -283,28 +311,84 @@ void ASplineGrassGenerator::GeneratePreview()
 void ASplineGrassGenerator::ExportToStaticMesh()
 {
 #if WITH_EDITOR
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UVs;
-    TArray<FColor> VertexColors;
-
-    BuildGrassMesh(Vertices, Triangles, Normals, UVs, VertexColors);
-
-    if (Vertices.Num() == 0)
+    if (LODs.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: No mesh data to export"));
+        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: LODs array is empty, nothing to export"));
         return;
     }
 
-    // 坐标轴转换（导出用）
-    for (int32 i = 0; i < Vertices.Num(); i++)
+    TArray<TUniquePtr<FMeshDescription>> OwnedMeshDescriptions;
+    TArray<const FMeshDescription*> MeshDescriptionPtrs;
+    TArray<FGrassLODInfo> BuiltLODConfigs;
+
+    for (int32 LODIdx = 0; LODIdx < LODs.Num(); LODIdx++)
     {
-        FVector V = Vertices[i];
-        Vertices[i] = FVector(-V.Y, V.X, V.Z);
-        
-        FVector N = Normals[i];
-        Normals[i] = FVector(-N.Y, N.X, N.Z);
+        const FGrassLODInfo& LODCfg = LODs[LODIdx];
+
+        TArray<FVector> Vertices;
+        TArray<int32> Triangles;
+        TArray<FVector> Normals;
+        TArray<FVector2D> UVs;
+        TArray<FColor> VertexColors;
+
+        BuildGrassMesh(Vertices, Triangles, Normals, UVs, VertexColors, LODCfg.LengthSegments, LODCfg.WidthSegments);
+
+        if (Vertices.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: LOD %d produced no vertices, skipping"), LODIdx);
+            continue;
+        }
+
+        // 坐标轴转换（导出用 — 所有 LOD 统一）
+        for (int32 i = 0; i < Vertices.Num(); i++)
+        {
+            FVector V = Vertices[i];
+            Vertices[i] = FVector(-V.Y, V.X, V.Z);
+
+            FVector N = Normals[i];
+            Normals[i] = FVector(-N.Y, N.X, N.Z);
+        }
+
+        TUniquePtr<FMeshDescription> MeshDesc = MakeUnique<FMeshDescription>();
+        FStaticMeshAttributes Attributes(*MeshDesc);
+        Attributes.Register();
+
+        FMeshDescriptionBuilder MeshBuilder;
+        MeshBuilder.SetMeshDescription(MeshDesc.Get());
+        MeshBuilder.EnablePolyGroups();
+        MeshBuilder.SetNumUVLayers(2);
+
+        TArray<FVertexInstanceID> VertexInstances;
+        for (int32 i = 0; i < Vertices.Num(); i++)
+        {
+            FVertexID VertexID = MeshBuilder.AppendVertex(Vertices[i]);
+            FVertexInstanceID InstanceID = MeshBuilder.AppendInstance(VertexID);
+            MeshBuilder.SetInstanceNormal(InstanceID, Normals[i]);
+            MeshBuilder.SetInstanceUV(InstanceID, UVs[i], 0);
+            MeshBuilder.SetInstanceUV(InstanceID, UVs[i], 1);
+            MeshBuilder.SetInstanceColor(InstanceID, FVector4f(VertexColors[i].R / 255.0f, VertexColors[i].G / 255.0f, VertexColors[i].B / 255.0f, VertexColors[i].A / 255.0f));
+            VertexInstances.Add(InstanceID);
+        }
+
+        FPolygonGroupID PolyGroup = MeshBuilder.AppendPolygonGroup(GrassMaterialSlotName);
+        for (int32 i = 0; i < Triangles.Num(); i += 3)
+        {
+            MeshBuilder.AppendTriangle(
+                VertexInstances[Triangles[i]],
+                VertexInstances[Triangles[i + 1]],
+                VertexInstances[Triangles[i + 2]],
+                PolyGroup);
+        }
+
+        MeshDescriptionPtrs.Add(MeshDesc.Get());
+        OwnedMeshDescriptions.Add(MoveTemp(MeshDesc));
+        BuiltLODConfigs.Add(LODCfg);
+    }
+
+    if (MeshDescriptionPtrs.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: No valid LOD mesh data to export"));
+        return;
     }
 
     FString PackagePath = ExportPath + MeshName;
@@ -313,60 +397,38 @@ void ASplineGrassGenerator::ExportToStaticMesh()
 
     UStaticMesh* StaticMesh = NewObject<UStaticMesh>(Package, *MeshName, RF_Public | RF_Standalone);
 
-    FMeshDescription MeshDesc;
-    FStaticMeshAttributes Attributes(MeshDesc);
-    Attributes.Register();
-
-    FMeshDescriptionBuilder MeshBuilder;
-    MeshBuilder.SetMeshDescription(&MeshDesc);
-    MeshBuilder.EnablePolyGroups();
-    MeshBuilder.SetNumUVLayers(2);
-
-    TArray<FVertexInstanceID> VertexInstances;
-    for (int32 i = 0; i < Vertices.Num(); i++)
-    {
-        FVertexID VertexID = MeshBuilder.AppendVertex(Vertices[i]);
-        FVertexInstanceID InstanceID = MeshBuilder.AppendInstance(VertexID);
-        MeshBuilder.SetInstanceNormal(InstanceID, Normals[i]);
-        MeshBuilder.SetInstanceUV(InstanceID, UVs[i], 0);
-        MeshBuilder.SetInstanceUV(InstanceID, UVs[i], 1);
-        MeshBuilder.SetInstanceColor(InstanceID, FVector4f(VertexColors[i].R / 255.0f, VertexColors[i].G / 255.0f, VertexColors[i].B / 255.0f, VertexColors[i].A / 255.0f));
-        VertexInstances.Add(InstanceID);
-    }
-
-    FPolygonGroupID PolyGroup = MeshBuilder.AppendPolygonGroup();
-    for (int32 i = 0; i < Triangles.Num(); i += 3)
-    {
-        TArray<FVertexInstanceID> TriVerts;
-        TriVerts.Add(VertexInstances[Triangles[i]]);
-        TriVerts.Add(VertexInstances[Triangles[i + 1]]);
-        TriVerts.Add(VertexInstances[Triangles[i + 2]]);
-        MeshBuilder.AppendTriangle(TriVerts[0], TriVerts[1], TriVerts[2], PolyGroup);
-    }
-
-    TArray<const FMeshDescription*> MeshDescriptions;
-    MeshDescriptions.Add(&MeshDesc);
-    
-    // 初始化 Static Mesh
     StaticMesh->InitResources();
     StaticMesh->SetLightingGuid();
+    if (UMaterialInterface* DefaultSurfaceMat = UMaterial::GetDefaultMaterial(EMaterialDomain::MD_Surface))
+    {
+        StaticMesh->GetStaticMaterials().Add(FStaticMaterial(DefaultSurfaceMat, GrassMaterialSlotName, GrassMaterialSlotName));
+    }
 
-    // 构建参数
+    // BuildFromMeshDescriptions reads SourceModel settings during the full editor build.
+    StaticMesh->bAutoComputeLODScreenSize = false;
+    StaticMesh->NaniteSettings.bEnabled = false;
+
+    StaticMesh->SetNumSourceModels(MeshDescriptionPtrs.Num());
+    for (int32 LODIdx = 0; LODIdx < MeshDescriptionPtrs.Num(); LODIdx++)
+    {
+        ConfigureCustomLODSourceModel(StaticMesh->GetSourceModel(LODIdx), LODIdx, BuiltLODConfigs[LODIdx].ScreenSize);
+    }
+
     UStaticMesh::FBuildMeshDescriptionsParams BuildParams;
     BuildParams.bBuildSimpleCollision = true;
     BuildParams.bFastBuild = false;
-    StaticMesh->BuildFromMeshDescriptions(MeshDescriptions, BuildParams);
+    StaticMesh->BuildFromMeshDescriptions(MeshDescriptionPtrs, BuildParams);
 
-    // ====================================
+    StaticMesh->bAutoComputeLODScreenSize = false;
+    for (int32 LODIdx = 0; LODIdx < MeshDescriptionPtrs.Num(); LODIdx++)
+    {
+        ConfigureCustomLODSourceModel(StaticMesh->GetSourceModel(LODIdx), LODIdx, BuiltLODConfigs[LODIdx].ScreenSize);
+        if (StaticMesh->GetRenderData() && LODIdx < MAX_STATIC_MESH_LODS)
+        {
+            StaticMesh->GetRenderData()->ScreenSize[LODIdx].Default = BuiltLODConfigs[LODIdx].ScreenSize;
+        }
+    }
 
-    // ==========================================
-
-    FStaticMeshSourceModel& SourceModel = StaticMesh->GetSourceModel(0);
-    SourceModel.BuildSettings.bGenerateLightmapUVs = false;
-    SourceModel.BuildSettings.bRecomputeNormals = false;
-    SourceModel.BuildSettings.bRecomputeTangents = true;
-    
-    StaticMesh->Build(false);
     StaticMesh->PostEditChange();
 
     FAssetRegistryModule::AssetCreated(StaticMesh);
@@ -377,131 +439,6 @@ void ASplineGrassGenerator::ExportToStaticMesh()
     SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
     UPackage::SavePackage(Package, StaticMesh, *PackageFileName, SaveArgs);
 
-    UE_LOG(LogTemp, Log, TEXT("SplineGrassGenerator: Exported mesh to %s"), *PackagePath);
-
-    // 一键 FBX Round-trip：导出 FBX 再导回（走 UE 标准导入管线）
-    if (bFbxRoundTripAfterExport)
-    {
-        UStaticMesh* ImportedMesh = nullptr;
-        if (RoundTripFbx(StaticMesh, ImportedMesh) && ImportedMesh)
-        {
-            UE_LOG(LogTemp, Log, TEXT("SplineGrassGenerator: FBX round-trip imported %s"), *ImportedMesh->GetPathName());
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: FBX round-trip failed."));
-        }
-    }
+    UE_LOG(LogTemp, Log, TEXT("SplineGrassGenerator: Exported mesh to %s with %d LODs"), *PackagePath, MeshDescriptionPtrs.Num());
 #endif
 }
-
-#if WITH_EDITOR
-bool ASplineGrassGenerator::RoundTripFbx(UStaticMesh* SourceMesh, UStaticMesh*& OutImportedMesh) const
-{
-    OutImportedMesh = nullptr;
-    if (!SourceMesh)
-    {
-        return false;
-    }
-
-    // 1) Export FBX to disk
-    FString ExportDir = FbxExportDirOnDisk;
-    if (ExportDir.IsEmpty())
-    {
-        ExportDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("TA_Tools"), TEXT("FbxRoundTrip"));
-    }
-    IFileManager::Get().MakeDirectory(*ExportDir, true);
-
-    const FString BaseName = SourceMesh->GetName();
-    const FString ExportFilename = FPaths::Combine(ExportDir, BaseName + TEXT(".fbx"));
-
-    UAssetExportTask* ExportTask = NewObject<UAssetExportTask>();
-    ExportTask->Object = SourceMesh;
-    ExportTask->Filename = ExportFilename;
-    ExportTask->bAutomated = true;
-    ExportTask->bPrompt = false;
-    ExportTask->bReplaceIdentical = true;
-    ExportTask->bUseFileArchive = false;
-    ExportTask->bWriteEmptyFiles = false;
-
-    const bool bExportOk = UExporter::RunAssetExportTask(ExportTask);
-    if (!bExportOk || !IFileManager::Get().FileExists(*ExportFilename))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: FBX export failed: %s"), *ExportFilename);
-        return false;
-    }
-
-    // 2) Import FBX back to Content
-    FString DestPath = FbxReimportDestinationPath;
-    if (DestPath.IsEmpty())
-    {
-        DestPath = ExportPath;
-    }
-    if (!DestPath.StartsWith(TEXT("/")))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: Invalid destination path: %s"), *DestPath);
-        return false;
-    }
-    // Ensure it ends with '/'
-    if (!DestPath.EndsWith(TEXT("/")))
-    {
-        DestPath += TEXT("/");
-    }
-
-    const FString DestName = BaseName + FbxReimportNameSuffix;
-
-    UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
-    ImportTask->Filename = ExportFilename;
-    ImportTask->DestinationPath = DestPath;
-    ImportTask->DestinationName = DestName;
-    ImportTask->bAutomated = true;
-    ImportTask->bSave = true;
-    ImportTask->bReplaceExisting = bFbxReimportReplaceExisting;
-
-    FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
-    TArray<UAssetImportTask*> Tasks;
-    Tasks.Add(ImportTask);
-    AssetToolsModule.Get().ImportAssetTasks(Tasks);
-
-    if (ImportTask->ImportedObjectPaths.Num() <= 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: FBX import produced no assets."));
-        return false;
-    }
-
-    // Prefer the first imported UStaticMesh
-    for (const FString& ObjPath : ImportTask->ImportedObjectPaths)
-    {
-        UObject* ImportedObj = StaticLoadObject(UObject::StaticClass(), nullptr, *ObjPath);
-        if (UStaticMesh* ImportedSM = Cast<UStaticMesh>(ImportedObj))
-        {
-            OutImportedMesh = ImportedSM;
-
-            // 导入后关闭 Nanite（避免走 Nanite 渲染路径）
-#if WITH_EDITORONLY_DATA
-            ImportedSM->NaniteSettings.bEnabled = false;
-#endif
-            ImportedSM->MarkPackageDirty();
-            ImportedSM->PostEditChange();
-
-            // 导入并修改后，立刻保存资源到磁盘
-            if (UPackage* ImportPackage = ImportedSM->GetOutermost())
-            {
-                const FString ImportPackageName = ImportPackage->GetName();
-                const FString ImportPackageFilename = FPackageName::LongPackageNameToFilename(
-                    ImportPackageName,
-                    FPackageName::GetAssetPackageExtension());
-
-                FSavePackageArgs SaveArgs;
-                SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-                UPackage::SavePackage(ImportPackage, ImportedSM, *ImportPackageFilename, SaveArgs);
-            }
-
-            return true;
-        }
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("SplineGrassGenerator: FBX import finished but no StaticMesh found."));
-    return false;
-}
-#endif

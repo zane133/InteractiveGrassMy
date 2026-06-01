@@ -8,6 +8,21 @@
 #include "Components/StaticMeshComponent.h"
 #include "SplineGrassGenerator.generated.h"
 
+USTRUCT(BlueprintType)
+struct FGrassLODInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LOD", meta = (ClampMin = "2", ClampMax = "64"))
+    int32 LengthSegments = 8;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LOD", meta = (ClampMin = "1", ClampMax = "8"))
+    int32 WidthSegments = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LOD", meta = (ClampMin = "0.001", ClampMax = "1.0"))
+    float ScreenSize = 1.0f;
+};
+
 UCLASS(Blueprintable, meta = (DisplayName = "Spline Grass Mesh Generator"))
 class TA_TOOLS_API ASplineGrassGenerator : public AActor
 {
@@ -33,26 +48,6 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export")
     FString ExportPath = TEXT("/Game/XW_Art/RES/TAExample/GrassAnim/Mesh/");
-
-    // ---- FBX Round-trip (Export FBX -> Import back) ----
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export|FBX Round Trip")
-    bool bFbxRoundTripAfterExport = true;
-
-    // 留空则使用 Project/Saved/TA_Tools/FbxRoundTrip/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export|FBX Round Trip")
-    FString FbxExportDirOnDisk;
-
-    // 导回 Content 的目标路径(例如 /Game/MyFolder/)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export|FBX Round Trip")
-    FString FbxReimportDestinationPath = TEXT("/Game/XW_Art/RES/TAExample/GrassAnim/Mesh/");
-
-    // 生成的新资产名后缀(避免覆盖原资产)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export|FBX Round Trip")
-    FString FbxReimportNameSuffix = TEXT("_RT");
-
-    // 默认允许覆盖同名 RT 资产,避免弹出覆盖对话框
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Export|FBX Round Trip")
-    bool bFbxReimportReplaceExisting = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Shape|Width", meta = (ClampMin = "0.1"))
     float BaseWidth = 5.0f;
@@ -81,6 +76,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|Shape|Options")
     bool bSmoothNormals = true;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline Grass|LOD")
+    TArray<FGrassLODInfo> LODs = {
+        {8, 1, 1.0f},
+        {4, 1, 0.08f},
+        {2, 1, 0.03f}
+    };
+
 protected:
     virtual void OnConstruction(const FTransform& Transform) override;
 
@@ -90,9 +92,7 @@ protected:
 
 private:
     void BuildGrassMesh(TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FVector2D>& UVs, TArray<FColor>& VertexColors);
+    void BuildGrassMesh(TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, TArray<FVector2D>& UVs, TArray<FColor>& VertexColors, int32 InLengthSegments, int32 InWidthSegments);
     float GetWidthAtDistance(float NormalizedDistance);
 
-#if WITH_EDITOR
-    bool RoundTripFbx(UStaticMesh* SourceMesh, UStaticMesh*& OutImportedMesh) const;
-#endif
 };
