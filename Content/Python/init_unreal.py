@@ -2,13 +2,9 @@
 init_unreal.py
 --------------
 UE5 编辑器启动时自动执行。
-在顶部菜单栏注册「BlueprintLisp」子菜单：
-  ── Blueprint DSL ──
-  Export Selected DSL（导出选中蓝图）
-  Export All DSL（导出全部蓝图）
-  ── Material DSL ──
-  Export Selected Material（导出选中材质）
-  Export All Materials（导出全部材质）
+在顶部菜单栏注册：
+  BlueprintLisp — Blueprint / Material DSL 导出
+  TATools — TA 工具（材质批量替换等）
 """
 
 import unreal
@@ -36,7 +32,7 @@ _MAT_ALL      = _cmd("export_materials",  "export_all")
 
 # ── 菜单注册 ──────────────────────────────────────────────────────────────────
 
-def _do_register():
+def _register_blueprint_lisp_menus():
     menus = unreal.ToolMenus.get()
     if not menus:
         unreal.log_warning("[BlueprintLisp] ToolMenus.get() 返回 None")
@@ -47,7 +43,6 @@ def _do_register():
         unreal.log_error("[BlueprintLisp] 未找到 LevelEditor.MainMenu")
         return
 
-    # 子菜单（已存在则复用）
     sub_menu = menus.find_menu("LevelEditor.MainMenu.BlueprintLisp")
     if not sub_menu:
         sub_menu = main_menu.add_sub_menu(
@@ -68,7 +63,6 @@ def _do_register():
         e.set_string_command(unreal.ToolMenuStringCommandType.PYTHON, unreal.Name(""), string=cmd)
         return e
 
-    # ── Blueprint DSL 分区 ────────────────────────────────────────────────────
     sec_bp = unreal.Name("BPDSLSection")
     sub_menu.add_section(sec_bp, unreal.Text("Blueprint DSL"))
 
@@ -85,7 +79,6 @@ def _do_register():
         _BP_ALL,
     ))
 
-    # ── Material DSL 分区 ─────────────────────────────────────────────────────
     sec_mat = unreal.Name("MatDSLSection")
     sub_menu.add_section(sec_mat, unreal.Text("Material DSL"))
 
@@ -102,8 +95,17 @@ def _do_register():
         _MAT_ALL,
     ))
 
-    menus.refresh_all_widgets()
-    unreal.log("[BlueprintLisp] 菜单注册成功 ✔")
+
+def _register_tatools_menus():
+    import PythonMenu as python_menu
+    python_menu.register_menus()
+
+
+def _do_register():
+    _register_blueprint_lisp_menus()
+    _register_tatools_menus()
+    unreal.ToolMenus.get().refresh_all_widgets()
+    unreal.log("[init_unreal] BlueprintLisp + TATools 菜单注册成功")
 
 
 # ── 延迟到 Slate 完全初始化后执行，只跑一次 ──────────────────────────────────

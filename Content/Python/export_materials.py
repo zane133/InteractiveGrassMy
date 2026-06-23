@@ -86,19 +86,12 @@ def _export_material_function_to_matlang_text(mf) -> str:
 
     path = mf.get_path_name()
 
-    # 优先尝试插件里可能提供的专用函数导出接口，
-    # 如未找到则退回到与 Material 相同的 export_material_to_text，
-    # 再不行就整体失败并回退到旧格式。
-    export_fn = getattr(bridge, "export_material_function_to_text", None)
-    if export_fn is None:
-        export_fn = getattr(bridge, "export_material_to_text", None)
-
-    if export_fn is None:
-        print("  [MaterialDSL] No MaterialFunction export API found on MatBP2FPPythonBridge")
+    if not hasattr(bridge, "export_material_function_to_text"):
+        print("  [MaterialDSL] export_material_function_to_text not found on MatBP2FPPythonBridge (rebuild plugin)")
         return ""
 
     try:
-        result = export_fn(path)
+        result = bridge.export_material_function_to_text(path)
     except Exception as e:
         print(f"  [MaterialDSL] ExportMaterialFunctionToText failed for {path}: {e}")
         return ""

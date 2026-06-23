@@ -47,7 +47,7 @@
   - 支持将 `Material / MaterialInstance / MaterialFunction` 导出为可读 DSL：
     - 基础 `Material`：通过 MatLang 导出完整节点图（含 `(expressions ...)` / `(outputs ...)`）
     - `MaterialInstance`：导出标量/向量/贴图/静态开关参数
-    - `MaterialFunction`：当前仅导出名称与 `description` 壳，**尚未实现完整节点图导出**（需要在 `MaterialBP2DSL` 插件中增加对 `UMaterialFunction` 的 MatLang 导出支持，然后在 `export_materials.py` 中接入）
+    - `MaterialFunction`：通过 MatLang 导出完整节点图（含 `(function-inputs ...)` / `(function-outputs ...)` / `(expressions ...)`）
   - 常用用法：
     - Content Browser 选中若干材质资产 → `export_materials.export_selected()`
     - 或指定路径批量导出：`export_materials.export_path("/Game/InteractiveGrass")`
