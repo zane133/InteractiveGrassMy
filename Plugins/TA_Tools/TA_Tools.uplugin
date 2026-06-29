@@ -16,6 +16,11 @@
 	"Installed": false,
 	"Modules": [
 		{
+			"Name": "TA_ToolsRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "TA_Tools",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
