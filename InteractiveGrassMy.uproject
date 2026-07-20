@@ -33,6 +33,26 @@
 		{
 			"Name": "WaterAdvanced",
 			"Enabled": true
+		},
+		{
+			"Name": "Prismatiscape",
+			"Enabled": true
+		},
+		{
+			"Name": "Niagara",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraFluids",
+			"Enabled": true
+		},
+		{
+			"Name": "GeometryScripting",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true
 		}
 	]
 }
