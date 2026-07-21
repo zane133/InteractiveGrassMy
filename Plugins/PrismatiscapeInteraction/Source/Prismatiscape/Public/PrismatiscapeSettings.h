@@ -38,6 +38,9 @@ void SetPrismatiscapeManagerClass(const TSubclassOf<class APrismatiscapeManager>
 UFUNCTION(BlueprintPure, Category="Prismatiscape")
 bool GetDrawDebugShapes() const;
 
+/** Runtime master switch (CVar: pris.Enabled). When false, Manager tick is disabled. */
+UFUNCTION(BlueprintPure, Category="Prismatiscape")
+bool IsEnabled() const;
 
 protected:
 friend class UPrismatiscapeWorldSubsystem;

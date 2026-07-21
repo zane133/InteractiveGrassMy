@@ -11,6 +11,12 @@ TAutoConsoleVariable<bool> CVarLogDebugShapes(
 	TEXT("Draws Debug Shapes for currently registered Prismatiscape Draw Components"),
 	ECVF_Default);
 
+TAutoConsoleVariable<bool> CVarPrismatiscapeEnabled(
+	TEXT("pris.Enabled"),
+	true,
+	TEXT("Master switch for Prismatiscape simulation. When false, Manager tick is disabled (no gather / RT update)."),
+	ECVF_Default);
+
 UPrismatiscapeSettings::UPrismatiscapeSettings()
 {
 	ConstructorHelpers::FClassFinder<APrismatiscapeManager> ManagerClassFinder(TEXT("/Script/Engine.Blueprint'/Prismatiscape/Prismatiscape_Manager_BP.Prismatiscape_Manager_BP_C'"));
@@ -20,4 +26,9 @@ UPrismatiscapeSettings::UPrismatiscapeSettings()
 bool UPrismatiscapeSettings::GetDrawDebugShapes() const
 {
 	return CVarLogDebugShapes.GetValueOnGameThread();
+}
+
+bool UPrismatiscapeSettings::IsEnabled() const
+{
+	return CVarPrismatiscapeEnabled.GetValueOnGameThread();
 }

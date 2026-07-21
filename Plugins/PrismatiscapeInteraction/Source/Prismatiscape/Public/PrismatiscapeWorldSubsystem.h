@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "HAL/IConsoleManager.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "PrismatiscapeWorldSubsystem.generated.h"
 
@@ -30,8 +31,15 @@ public:
 	void SpawnManager();
 
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
-	
+
+	/** Apply pris.Enabled to the Manager (enable/disable tick). */
+	void ApplyEnabledState();
+
 private:
+	void OnConsoleVariablesChanged();
+
 	UPROPERTY()
 	TObjectPtr<class APrismatiscapeManager> Manager;
+
+	FConsoleVariableSinkHandle ConsoleVariableSinkHandle;
 };

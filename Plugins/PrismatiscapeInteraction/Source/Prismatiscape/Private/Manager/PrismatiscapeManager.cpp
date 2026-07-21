@@ -31,6 +31,11 @@ void APrismatiscapeManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (!UPrismatiscapeSettings::Get()->IsEnabled())
+	{
+		return;
+	}
+
 	SetFollowLocationThisFrame();
 
 	UpdateAllVisibilities();

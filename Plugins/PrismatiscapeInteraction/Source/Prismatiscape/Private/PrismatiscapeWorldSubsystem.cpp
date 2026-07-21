@@ -5,6 +5,7 @@
 #include "PrismatiscapeSettings.h"
 #include "Manager/PrismatiscapeManager.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 
 UPrismatiscapeWorldSubsystem* UPrismatiscapeWorldSubsystem::Get(const UObject* WorldContextObject)
 {
@@ -25,6 +26,10 @@ void UPrismatiscapeWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 
 	SpawnManager();
+	ApplyEnabledState();
+
+	ConsoleVariableSinkHandle = IConsoleManager::Get().RegisterConsoleVariableSink_Handle(
+		FConsoleCommandDelegate::CreateUObject(this, &UPrismatiscapeWorldSubsystem::OnConsoleVariablesChanged));
 
 	// Bind to world end play
 	if (!OnWorldCleanupHandle.IsValid()) OnWorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &UPrismatiscapeWorldSubsystem::OnWorldEndPlay);
@@ -32,6 +37,8 @@ void UPrismatiscapeWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 void UPrismatiscapeWorldSubsystem::OnWorldEndPlay(UWorld* World, bool bSessionEnded, bool bCleanupResources)
 {
+	IConsoleManager::Get().UnregisterConsoleVariableSink_Handle(ConsoleVariableSinkHandle);
+
 	FWorldDelegates::OnWorldCleanup.Remove(OnWorldCleanupHandle);
 
 	if (!Manager) return;
@@ -55,6 +62,19 @@ void UPrismatiscapeWorldSubsystem::SpawnManager()
 	Manager = GetWorld()->SpawnActor<APrismatiscapeManager>(UPrismatiscapeSettings::Get()->PrismatiscapeManagerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 
 	UPrismatiscapeSettings::Get()->PrismatiscapeManager = Manager;
+}
+
+void UPrismatiscapeWorldSubsystem::ApplyEnabledState()
+{
+	if (!IsValid(Manager)) return;
+
+	const bool bEnabled = UPrismatiscapeSettings::Get()->IsEnabled();
+	Manager->SetActorTickEnabled(bEnabled);
+}
+
+void UPrismatiscapeWorldSubsystem::OnConsoleVariablesChanged()
+{
+	ApplyEnabledState();
 }
 
 bool UPrismatiscapeWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
