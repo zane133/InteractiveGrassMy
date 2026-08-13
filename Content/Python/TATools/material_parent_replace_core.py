@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 import unreal
 
@@ -417,8 +417,12 @@ def _is_direct_child_of_master(mi, old_master: unreal.Material) -> bool:
     return parent_path == old_pkg
 
 
-def collect_material_instances(scan_paths: list[str]) -> list[unreal.AssetData]:
-    _sync_asset_registry(scan_paths)
+def collect_material_instances(
+    scan_paths: list[str],
+    synchronize_registry: bool = True,
+) -> list[unreal.AssetData]:
+    if synchronize_registry:
+        _sync_asset_registry(scan_paths)
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     seen: set[str] = set()
     results: list[unreal.AssetData] = []
@@ -443,6 +447,7 @@ def collect_material_instances(scan_paths: list[str]) -> list[unreal.AssetData]:
 def find_matching_instances(
     old_master: unreal.Material,
     scan_paths: list[str],
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> tuple[list[tuple[str, Any]], int, list[str]]:
     """
     Return (matches, scanned_count, parent_mismatch_samples).
@@ -452,16 +457,25 @@ def find_matching_instances(
     scanned = collect_material_instances(scan_paths)
     old_pkg = package_path_for_asset(old_master)
 
-    for asset_data in scanned:
+    scanned_total = len(scanned)
+    for index, asset_data in enumerate(scanned, start=1):
         object_path = f"{asset_data.package_name}.{asset_data.asset_name}"
+        if progress_callback is not None:
+            progress_callback(index - 1, scanned_total, object_path)
         try:
             mi = unreal.EditorAssetLibrary.load_asset(object_path)
         except Exception:
+            if progress_callback is not None:
+                progress_callback(index, scanned_total, object_path)
             continue
         if mi is None:
+            if progress_callback is not None:
+                progress_callback(index, scanned_total, object_path)
             continue
         if _is_direct_child_of_master(mi, old_master):
             matches.append((object_path, mi))
+            if progress_callback is not None:
+                progress_callback(index, scanned_total, object_path)
             continue
 
         parent_class, parent_path = _get_instance_parent_info(mi)
@@ -469,6 +483,8 @@ def find_matching_instances(
             mismatch_samples.append(
                 f"{object_path} -> {parent_class}: {parent_path}"
             )
+        if progress_callback is not None:
+            progress_callback(index, scanned_total, object_path)
 
     return matches, len(scanned), mismatch_samples
 
@@ -487,6 +503,116 @@ def preview_instance(
         return InstancePreview(object_path=object_path, error=str(exc))
 
 
+class MaterialParentReplaceJob:
+    """Incremental replacement job for callers that need a responsive UI."""
+
+    def __init__(
+        self,
+        old_path: str,
+        new_path: str,
+        scan_folder_text: str,
+        scan_entire_project: bool,
+        auto_save: bool,
+    ) -> None:
+        self.old_master, self.new_master = validate_masters(old_path, new_path)
+        self.scan_paths = resolve_scan_paths(scan_folder_text, scan_entire_project)
+        self.new_master_names = _read_master_param_names(self.new_master)
+        self.auto_save = auto_save
+        self.result = ReplaceRunResult(
+            dry_run=False,
+            old_master_path=normalize_package_path(self.old_master.get_path_name()),
+            new_master_path=normalize_package_path(self.new_master.get_path_name()),
+            scan_paths=self.scan_paths,
+        )
+        self._asset_data: list[unreal.AssetData] = []
+        self._candidates: list[tuple[str, Any]] = []
+        self._scan_index = 0
+        self._preview_index = 0
+        self._apply_index = 0
+        self._modified_assets: list[Any] = []
+
+    def collect_candidates(self) -> int:
+        """Collect registry data. This can block while UE synchronizes the registry."""
+        # The editor's registry is already live. Avoid the synchronous registry
+        # scan here because it blocks the UI before incremental progress starts.
+        self._asset_data = collect_material_instances(
+            self.scan_paths,
+            synchronize_registry=False,
+        )
+        self.result.scanned_instance_count = len(self._asset_data)
+        return len(self._asset_data)
+
+    def scan_next(self) -> tuple[int, int, str]:
+        asset_data = self._asset_data[self._scan_index]
+        object_path = f"{asset_data.package_name}.{asset_data.asset_name}"
+        self._scan_index += 1
+
+        try:
+            mi = unreal.EditorAssetLibrary.load_asset(object_path)
+        except Exception:
+            mi = None
+
+        if mi is not None:
+            if _is_direct_child_of_master(mi, self.old_master):
+                self._candidates.append((object_path, mi))
+            elif len(self.result.parent_mismatch_samples) < 8:
+                parent_class, parent_path = _get_instance_parent_info(mi)
+                if parent_path:
+                    self.result.parent_mismatch_samples.append(
+                        f"{object_path} -> {parent_class}: {parent_path}"
+                    )
+
+        return self._scan_index, len(self._asset_data), object_path
+
+    @property
+    def scan_complete(self) -> bool:
+        return self._scan_index >= len(self._asset_data)
+
+    @property
+    def candidate_count(self) -> int:
+        return len(self._candidates)
+
+    def preview_next(self) -> tuple[int, int, str]:
+        object_path, mi = self._candidates[self._preview_index]
+        self.result.instances.append(preview_instance(mi, self.new_master))
+        self._preview_index += 1
+        return self._preview_index, len(self._candidates), object_path
+
+    @property
+    def preview_complete(self) -> bool:
+        return self._preview_index >= len(self._candidates)
+
+    def apply_next(self) -> tuple[int, int, str]:
+        object_path, mi = self._candidates[self._apply_index]
+        preview = self.result.instances[self._apply_index]
+        self._apply_index += 1
+
+        if not preview.error:
+            try:
+                overrides = _read_instance_overrides(mi)
+                kept_values, discarded = partition_overrides_by_kind(
+                    overrides, self.new_master_names
+                )
+                _apply_instance_reparent(mi, self.new_master, kept_values)
+                preview.kept = {kind: sorted(values) for kind, values in kept_values.items()}
+                preview.discarded = discarded
+                self.result.modified_paths.append(object_path)
+                self._modified_assets.append(mi)
+            except Exception as exc:
+                preview.error = str(exc)
+
+        return self._apply_index, len(self._candidates), object_path
+
+    @property
+    def apply_complete(self) -> bool:
+        return self._apply_index >= len(self._candidates)
+
+    def finish(self) -> ReplaceRunResult:
+        if self.auto_save and self._modified_assets:
+            unreal.EditorAssetLibrary.save_loaded_assets(self._modified_assets)
+        return self.result
+
+
 def run_material_parent_replace(
     old_path: str,
     new_path: str,
@@ -494,7 +620,23 @@ def run_material_parent_replace(
     scan_entire_project: bool,
     dry_run: bool,
     auto_save: bool,
+    progress_callback: Callable[[str, int, int, str], None] | None = None,
 ) -> ReplaceRunResult:
+    def report_progress(
+        phase: str,
+        completed: int = 0,
+        total: int = 0,
+        object_path: str = "",
+    ) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(phase, completed, total, object_path)
+        except Exception as exc:
+            unreal.log_warning(
+                f"[MaterialParentReplace] Progress update failed: {exc}"
+            )
+
     try:
         old_master, new_master = validate_masters(old_path, new_path)
     except ValueError as exc:
@@ -518,8 +660,13 @@ def run_material_parent_replace(
         scan_paths=scan_paths,
     )
 
+    report_progress("scanning")
     candidates, scanned_count, mismatch_samples = find_matching_instances(
-        old_master, scan_paths
+        old_master,
+        scan_paths,
+        lambda completed, total, object_path: report_progress(
+            "scanning", completed, total, object_path
+        ),
     )
     result.scanned_instance_count = scanned_count
     result.parent_mismatch_samples = mismatch_samples
@@ -540,14 +687,20 @@ def run_material_parent_replace(
     modified_assets = []
 
     if dry_run:
-        for object_path, mi in candidates:
+        candidate_count = len(candidates)
+        for index, (object_path, mi) in enumerate(candidates, start=1):
+            report_progress("previewing", index - 1, candidate_count, object_path)
             result.instances.append(preview_instance(mi, new_master))
+            report_progress("previewing", index, candidate_count, object_path)
         return result
 
-    for object_path, mi in candidates:
+    candidate_count = len(candidates)
+    for index, (object_path, mi) in enumerate(candidates, start=1):
+        report_progress("replacing", index - 1, candidate_count, object_path)
         preview = preview_instance(mi, new_master)
         if preview.error:
             result.instances.append(preview)
+            report_progress("replacing", index, candidate_count, object_path)
             continue
 
         try:
@@ -566,6 +719,8 @@ def run_material_parent_replace(
         except Exception as exc:
             preview.error = str(exc)
             result.instances.append(preview)
+
+        report_progress("replacing", index, candidate_count, object_path)
 
     if auto_save and modified_assets:
         unreal.EditorAssetLibrary.save_loaded_assets(modified_assets)
