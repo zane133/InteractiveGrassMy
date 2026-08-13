@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QCheckBox,
     QMessageBox,
+    QProgressBar,
 )
 from PySide6.QtCore import Qt, QTimer
 
@@ -31,6 +32,7 @@ importlib.reload(material_parent_replace_core)
 
 from TATools.material_parent_replace_core import (
     MASTER_MATERIAL_CLASS,
+    MaterialParentReplaceJob,
     format_instance_summary,
     format_zero_match_hint,
     normalize_object_path,
@@ -134,6 +136,12 @@ class MaterialParentReplaceWindow(QWidget):
         action_row.addStretch(1)
         main_layout.addLayout(action_row)
 
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        main_layout.addWidget(self.progress_bar)
+
         self.result_list = QListWidget(self)
         self.result_list.itemDoubleClicked.connect(self.on_item_double_clicked)
         main_layout.addWidget(self.result_list, 1)
@@ -145,6 +153,7 @@ class MaterialParentReplaceWindow(QWidget):
         stats_row.addStretch(1)
         stats_row.addWidget(self.count_label)
         main_layout.addLayout(stats_row)
+        self._replace_job = None
 
     def _material_row(
         self,
@@ -195,7 +204,7 @@ class MaterialParentReplaceWindow(QWidget):
     def _set_status(self, text: str) -> None:
         self.status_label.setText(text)
 
-    def _run(self, dry_run: bool) -> None:
+    def _run(self, dry_run: bool, progress_callback=None) -> None:
         old_path = self.old_edit.text().strip()
         new_path = self.new_edit.text().strip()
         if not old_path or not new_path:
@@ -209,6 +218,7 @@ class MaterialParentReplaceWindow(QWidget):
             scan_entire_project=self.scan_all_checkbox.isChecked(),
             dry_run=dry_run,
             auto_save=self.auto_save_checkbox.isChecked() and not dry_run,
+            progress_callback=progress_callback,
         )
 
         if result.error:
@@ -245,11 +255,13 @@ class MaterialParentReplaceWindow(QWidget):
         self.count_label.setText(f"匹配实例: {len(instances)}")
 
     def on_preview_clicked(self) -> None:
-        self._run(dry_run=True)
+        self._begin_progress("正在扫描匹配实例…")
+        self._run(dry_run=True, progress_callback=self._on_replace_progress)
 
     def on_execute_clicked(self) -> None:
         if self.dry_run_checkbox.isChecked():
-            self._run(dry_run=True)
+            self._begin_progress("正在扫描匹配实例…")
+            self._run(dry_run=True, progress_callback=self._on_replace_progress)
             self._set_status("当前为“仅预演”模式；取消勾选后再执行替换，或先点“预演”查看结果")
             return
 
@@ -259,19 +271,69 @@ class MaterialParentReplaceWindow(QWidget):
             self._set_status("请填写旧母材质与新母材质路径")
             return
 
-        preview = run_material_parent_replace(
-            old_path=old_path,
-            new_path=new_path,
-            scan_folder_text=self.scan_edit.text().strip(),
-            scan_entire_project=self.scan_all_checkbox.isChecked(),
-            dry_run=True,
-            auto_save=False,
-        )
-        if preview.error:
-            self._set_status(f"错误: {preview.error}")
-            write_report(preview)
+        self._begin_progress("正在准备替换…")
+        self.preview_button.setEnabled(False)
+        self.execute_button.setEnabled(False)
+        try:
+            self._replace_job = MaterialParentReplaceJob(
+                old_path,
+                new_path,
+                self.scan_edit.text().strip(),
+                self.scan_all_checkbox.isChecked(),
+                self.auto_save_checkbox.isChecked(),
+            )
+        except ValueError as exc:
+            self.preview_button.setEnabled(True)
+            self.execute_button.setEnabled(True)
+            self._set_status(f"错误: {exc}")
             return
+        QTimer.singleShot(1, self._collect_execute_candidates)
 
+    def _collect_execute_candidates(self) -> None:
+        try:
+            total = self._replace_job.collect_candidates()
+        except Exception as exc:
+            self._finish_execute_error(exc)
+            return
+        if total == 0:
+            self._finish_execute_preview()
+            return
+        self._set_progress("scanning", 0, total)
+        QTimer.singleShot(1, self._scan_execute_next)
+
+    def _scan_execute_next(self) -> None:
+        try:
+            completed, total, object_path = self._replace_job.scan_next()
+        except Exception as exc:
+            self._finish_execute_error(exc)
+            return
+        self._set_progress("scanning", completed, total, object_path)
+        if self._replace_job.scan_complete:
+            if self._replace_job.candidate_count:
+                self._set_progress("previewing", 0, self._replace_job.candidate_count)
+                QTimer.singleShot(1, self._preview_execute_next)
+            else:
+                self._finish_execute_preview()
+            return
+        QTimer.singleShot(1, self._scan_execute_next)
+
+    def _preview_execute_next(self) -> None:
+        try:
+            completed, total, object_path = self._replace_job.preview_next()
+        except Exception as exc:
+            self._finish_execute_error(exc)
+            return
+        self._set_progress("previewing", completed, total, object_path)
+        if self._replace_job.preview_complete:
+            self._finish_execute_preview()
+            return
+        QTimer.singleShot(1, self._preview_execute_next)
+
+    def _finish_execute_preview(self) -> None:
+        preview = self._replace_job.result
+        preview.dry_run = True
+        self.preview_button.setEnabled(True)
+        self.execute_button.setEnabled(True)
         count = preview.instance_count
         if count == 0:
             self._populate_results([])
@@ -301,17 +363,66 @@ class MaterialParentReplaceWindow(QWidget):
 
     def _deferred_execute(self) -> None:
         """Apply on the next event-loop tick to avoid D3D12 crashes mid-draw."""
+        self._replace_job.result.dry_run = False
         self._set_status("正在执行替换…")
+        self._set_progress("replacing", 0, self._replace_job.candidate_count)
         self.preview_button.setEnabled(False)
         self.execute_button.setEnabled(False)
-        QTimer.singleShot(0, self._execute_apply)
+        QTimer.singleShot(1, self._execute_apply_next)
 
-    def _execute_apply(self) -> None:
+    def _execute_apply_next(self) -> None:
         try:
-            self._run(dry_run=False)
-        finally:
+            completed, total, object_path = self._replace_job.apply_next()
+        except Exception as exc:
+            self._finish_execute_error(exc)
+            return
+        self._set_progress("replacing", completed, total, object_path)
+        if self._replace_job.apply_complete:
+            result = self._replace_job.finish()
+            self._populate_results(result.instances)
+            report_path = write_report(result)
+            self._set_status(
+                f"已修改 {len(result.modified_paths)} 个实例，报告: {report_path}"
+            )
             self.preview_button.setEnabled(True)
             self.execute_button.setEnabled(True)
+            return
+        QTimer.singleShot(1, self._execute_apply_next)
+
+    def _finish_execute_error(self, exc: Exception) -> None:
+        self.preview_button.setEnabled(True)
+        self.execute_button.setEnabled(True)
+        self._set_status(f"错误: {exc}")
+
+    def _set_progress(
+        self,
+        phase: str,
+        completed: int,
+        total: int,
+        object_path: str = "",
+    ) -> None:
+        self.progress_bar.setRange(0, max(total, 1))
+        self.progress_bar.setValue(min(completed, max(total, 1)))
+        labels = {"scanning": "扫描", "previewing": "预演", "replacing": "替换"}
+        label = labels.get(phase, "处理")
+        self.progress_bar.setFormat(f"{label}: %v / %m  (%p%)")
+        self._set_status(f"正在{label} {completed} / {total}: {object_path}")
+        if phase == "replacing":
+            self.count_label.setText(f"匹配实例: {total}")
+
+    def _on_replace_progress(
+        self,
+        phase: str,
+        completed: int,
+        total: int,
+        object_path: str = "",
+    ) -> None:
+        self._set_progress(phase, completed, total, object_path)
+
+    def _begin_progress(self, text: str) -> None:
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setFormat(text)
+        self._set_status(text)
 
     def on_item_double_clicked(self, item: QListWidgetItem) -> None:
         asset_path = item.data(Qt.UserRole)
