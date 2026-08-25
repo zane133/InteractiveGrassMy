@@ -2,7 +2,7 @@
 
 面向关卡/TA 美术，说明如何生成草叶 Mesh、刷草、配置材质风动与交互，以及 LOD / 剔除相关设置。
 
-**引擎版本：** Unreal Engine 5.6  
+**引擎版本：** Unreal Engine 5.8  
 **示例资源路径：** `Content/XW_Art/RES/TAExample/`
 
 ---

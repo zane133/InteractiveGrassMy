@@ -1,6 +1,6 @@
 # InteractiveGrassMy
 
-一个基于 Unreal Engine 5.6 的交互草地实验项目，包含草地受角色/遮罩影响的交互效果，以及一个配套的 Blender 数据烘培插件 `ChannelDataBaker`。
+一个基于 Unreal Engine 5.8 的交互草地实验项目，包含草地受角色/遮罩影响的交互效果，以及一个配套的 Blender 数据烘培插件 `ChannelDataBaker`。
 
 ## 项目内容
 
@@ -10,13 +10,13 @@
 
 ## 运行环境
 
-- Unreal Engine `5.6`
+- Unreal Engine `5.8.1`（本机引擎路径 `F:\3_UE_Editor\UE_5.8`）
 - Windows 桌面平台
 - 如需使用 Blender 插件，建议 Blender `3.6+`
 
 ## 快速开始
 
-1. 用 Unreal Engine 5.6 打开 `InteractiveGrassMy.uproject`
+1. 用 Unreal Engine 5.8 打开 `InteractiveGrassMy.uproject`
 2. 默认启动地图为 `Content/InteractiveGrass/Maps/TutorialMap`
 3. 如果工程提示重新生成 C++ 项目，可重新生成项目文件或使用 `rebuild_cpp_env.bat`
 

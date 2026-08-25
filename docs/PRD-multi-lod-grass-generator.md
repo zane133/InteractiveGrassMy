@@ -105,7 +105,7 @@ Tests should verify that `BuildGrassMesh` produces correct output arrays (vertex
 ## Further Notes
 
 - This PRD covers `Plugins/TA_Tools/Source/TA_Tools/Public/SplineGrassGenerator.h` and `Plugins/TA_Tools/Source/TA_Tools/Private/SplineGrassGenerator.cpp`. No other files are modified.
-- The existing `BuildFromMeshDescriptions` API in UE5.6 supports multi-LOD construction natively via the array parameter; no engine modification is required.
+- The existing `BuildFromMeshDescriptions` API in UE5.8 supports multi-LOD construction natively via the array parameter; no engine modification is required.
 - The `FGrassLODInfo` defaults (8/4/2 segments) were chosen as a balanced starting point following discussion. Individual projects can adjust in-editor.
 - Coordinate-axis rotation `FVector(-V.Y, V.X, V.Z)` is preserved from the current implementation and applied uniformly across all LODs.
 - All decisions in this document are the result of a 10-question design interview covering data structure, algorithm signature, LOD count, ScreenSize thresholds, WPO synchronization, coordinate transforms, FBX round-trip behavior, and preview strategy.

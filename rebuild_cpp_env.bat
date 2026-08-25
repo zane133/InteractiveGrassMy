@@ -6,7 +6,7 @@ REM Unreal C++ one-click cleanup/regenerate/build script
 REM Usage:
 REM   - Double click this file in project root
 REM   - Optional engine path parameter:
-REM       rebuild_cpp_env.bat "E:\unreal\Editor\UE_5.6"
+REM       rebuild_cpp_env.bat "F:\3_UE_Editor\UE_5.8"
 REM -----------------------------------------------------------------------------
 
 set "PROJECT_DIR=%~dp0"

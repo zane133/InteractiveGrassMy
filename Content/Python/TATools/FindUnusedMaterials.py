@@ -204,7 +204,7 @@ class FindUnusedMaterialsWindow(QWidget):
         if not asset_path:
             return
         try:
-            # UE5.6 中 SyncBrowserToObjects 接收资产路径字符串数组参数 asset_paths
+            # UE5.8 中 SyncBrowserToObjects 接收资产路径字符串数组参数 asset_paths
             unreal.EditorAssetLibrary.sync_browser_to_objects(asset_paths=[asset_path])
         except Exception as e:
             unreal.log_warning(f"Failed to locate asset in content browser: {asset_path}, error: {e}")
