@@ -22,7 +22,7 @@ if not exist "%UPROJECT%" (
 )
 
 if "%~1"=="" (
-    set "UE_ROOT=E:\unreal\Editor\UE_5.6"
+    set "UE_ROOT=F:\3_UE_Editor\UE_5.8"
 ) else (
     set "UE_ROOT=%~1"
 )

@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.6",
+	"EngineAssociation": "F:/3_UE_Editor/UE_5.8",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -36,7 +36,8 @@
 		},
 		{
 			"Name": "Prismatiscape",
-			"Enabled": true
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/28e700a562a941978b2f3d46df591e05"
 		},
 		{
 			"Name": "Niagara",

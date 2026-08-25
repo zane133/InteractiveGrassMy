@@ -10,7 +10,7 @@
 	"DocsURL": "",
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/28e700a562a941978b2f3d46df591e05",
 	"SupportURL": "https://discord.com/invite/prismaticadevlearninghub",
-	"EngineVersion": "5.6.0",
+	"EngineVersion": "5.8.0",
 	"CanContainContent": true,
 	"Installed": true,
 	"Modules": [

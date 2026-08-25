@@ -17,7 +17,7 @@ void FInteractiveGrassMyModule::StartupModule()
 	}
 	else
 	{
-		PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(
+		PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(
 			this,
 			&FInteractiveGrassMyModule::RegisterInverseColorViewExtension);
 	}
@@ -27,7 +27,7 @@ void FInteractiveGrassMyModule::ShutdownModule()
 {
 	if (PostEngineInitHandle.IsValid())
 	{
-		FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
 		PostEngineInitHandle.Reset();
 	}
 
