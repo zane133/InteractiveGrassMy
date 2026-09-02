@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Install PyPI packages into the project's Content/Python directory using
-Unreal's bundled Python interpreter and the Tsinghua PyPI mirror.
+Install PyPI packages into Unreal Engine's SwitchboardThirdParty directory using
+the engine's bundled Python interpreter and the Tsinghua PyPI mirror.
 """
 
 from __future__ import annotations
 
 import importlib
+import importlib.machinery
 import os
 import platform
 import subprocess
@@ -16,13 +17,46 @@ from typing import Tuple
 import unreal
 
 TSINGHUA_MIRROR = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+UE_5_8_PACKAGE_REQUIREMENTS = {
+    "pyside6": "PySide6_Essentials==6.5.3",
+}
+
+
+def _engine_package_dir() -> str:
+    """Return UE 5.8.1's machine-local third-party Python package directory."""
+    return os.path.normpath(
+        os.path.join(
+            unreal.Paths.engine_dir(),
+            "Extras",
+            "ThirdPartyNotUE",
+            "SwitchboardThirdParty",
+        )
+    )
+
+
+def _activate_engine_package_dir() -> str:
+    """Put the engine-local packages before the project's Content/Python path."""
+    package_dir = _engine_package_dir()
+    normalized = os.path.normcase(os.path.normpath(package_dir))
+    sys.path[:] = [
+        path
+        for path in sys.path
+        if os.path.normcase(os.path.normpath(path)) != normalized
+    ]
+    sys.path.insert(0, package_dir)
+    return package_dir
 
 
 def is_package_installed(package_name: str) -> bool:
+    package_dir = _activate_engine_package_dir()
+    importlib.invalidate_caches()
+    spec = importlib.machinery.PathFinder.find_spec(package_name, [package_dir])
+    if spec is None:
+        return False
     try:
         importlib.import_module(package_name)
         return True
-    except ImportError:
+    except (ImportError, OSError):
         return False
 
 
@@ -46,10 +80,6 @@ def _engine_python_exe() -> str:
     return sys.executable
 
 
-def _install_target_dir() -> str:
-    return unreal.Paths.project_content_dir() + "Python"
-
-
 def install_package(package_name: str, pip_name: str | None = None) -> Tuple[bool, str]:
     """
     尝试安装指定的 Python 包。
@@ -63,13 +93,14 @@ def install_package(package_name: str, pip_name: str | None = None) -> Tuple[boo
     """
     if pip_name is None:
         pip_name = package_name
+    pip_requirement = UE_5_8_PACKAGE_REQUIREMENTS.get(pip_name.casefold(), pip_name)
 
+    package_dir = _activate_engine_package_dir()
     if is_package_installed(package_name):
-        return True, f"{package_name} 已安装"
+        return True, f"{package_name} 已安装（UE 5.8.1：{package_dir}）"
 
     unreal.log_warning(f"未找到 {package_name} 包，尝试安装...")
 
-    target = _install_target_dir()
     python_exe = _engine_python_exe()
 
     try:
@@ -79,16 +110,17 @@ def install_package(package_name: str, pip_name: str | None = None) -> Tuple[boo
                 "-m",
                 "pip",
                 "install",
-                pip_name,
+                pip_requirement,
                 "--target",
-                target,
+                package_dir,
                 "-i",
                 TSINGHUA_MIRROR,
             ]
         )
 
+        importlib.invalidate_caches()
         if is_package_installed(package_name):
-            return True, f"{package_name} 安装成功"
+            return True, f"{package_name} 安装成功（UE 5.8.1：{package_dir}）"
         return False, f"{package_name} 安装失败"
 
     except subprocess.CalledProcessError as exc:
