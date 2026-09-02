@@ -30,6 +30,12 @@ _MATERIAL_PARENT_REPLACE = _cmd(
     reload_deps=["TATools.material_parent_replace_core"],
 )
 
+_CUSTOM_NODE_FROM_SHADER = _cmd(
+    "TATools.CustomNodeFromShader",
+    "main",
+    reload_deps=["TATools.custom_node_shader_core"],
+)
+
 
 def _entry(label: str, tooltip: str, cmd: str) -> unreal.ToolMenuEntry:
     entry = unreal.ToolMenuEntry(type=unreal.MultiBlockType.MENU_ENTRY)
@@ -77,6 +83,16 @@ def register_menus() -> None:
             "支持预演、参数迁移与报告。\n"
             "打开前在 Content Browser 选中 1～2 个 Material 可预填旧/新路径。",
             _MATERIAL_PARENT_REPLACE,
+        ),
+    )
+
+    sub_menu.add_menu_entry(
+        _MATERIAL_SECTION,
+        _entry(
+            "Shader 创建 Custom Node",
+            "粘贴 Custom Node HLSL，自动解析 Output Type 和 Inputs，"
+            "然后在选中的 Material 中创建 Custom Node。",
+            _CUSTOM_NODE_FROM_SHADER,
         ),
     )
 

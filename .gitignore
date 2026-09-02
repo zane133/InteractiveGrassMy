@@ -34,3 +34,12 @@ Plugins/**/.git/
 __pycache__/
 *.pyc
 *.pyo
+
+# Per-machine Python packages installed by Content/Python/PackageInstall.py
+/Content/Python/PySide6/
+/Content/Python/shiboken6/
+/Content/Python/bin/
+/Content/Python/pyside6-*.dist-info/
+/Content/Python/pyside6_addons-*.dist-info/
+/Content/Python/pyside6_essentials-*.dist-info/
+/Content/Python/shiboken6-*.dist-info/

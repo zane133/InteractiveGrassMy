@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="E:/unreal/Editor/UE_5.6/Engine/Config" vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/Plugins/Blueprint2DSL-main" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/Plugins/MaterialBP2DSL" vcs="Git" />

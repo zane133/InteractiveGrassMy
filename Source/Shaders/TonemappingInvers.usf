@@ -1,0 +1,14 @@
+int pre()
+{
+//=========== inject start ============
+
+	return 0;
+}
+
+#include "/Engine/Private/TonemapCommon.ush"
+
+void aaa()
+{
+	
+//======== inject end ==============
+}

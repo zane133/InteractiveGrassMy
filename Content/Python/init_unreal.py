@@ -106,6 +106,13 @@ def _do_register():
     _register_tatools_menus()
     unreal.ToolMenus.get().refresh_all_widgets()
     unreal.log("[init_unreal] BlueprintLisp + TATools 菜单注册成功")
+    try:
+        from TATools.material_parent_replace_external import (
+            show_pending_result_notification,
+        )
+        show_pending_result_notification()
+    except Exception as exc:
+        unreal.log_warning(f"[MaterialParentReplace] 后台结果通知失败: {exc}")
 
 
 # ── 延迟到 Slate 完全初始化后执行，只跑一次 ──────────────────────────────────
